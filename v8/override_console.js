@@ -8,5 +8,9 @@ warn_stack = new Array(0),
 err_stack = new Array(0),
 
 console.log = function(text) {
-  log_stack.push(text)
+  log_stack.push(text);
+}
+
+console.err = function(text) {
+  log_err.push(text);
 }
