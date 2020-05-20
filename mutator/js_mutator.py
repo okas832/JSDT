@@ -20,7 +20,10 @@ def ast_to_json(ast):
             for ele in val:
                 rtn[key].append(ast_to_json(ele))
         elif type(val) in (int,str,bool) or (val is None): 
-            rtn[key]=val
+            if key=='isAsync':
+                rtn["async"]=val
+            else:
+                rtn[key]=val
         elif isinstance(val,re.Pattern) and 'value'==key and 'regex' in ast.keys():
             rtn[key]=dict()
         else:
@@ -28,6 +31,9 @@ def ast_to_json(ast):
             print(key)
             print(val)
             raise Exception
+
+        if "type" in ast.keys() and ast.type=="ArrowFunctionExpression":
+            rtn["id"]=None
     return rtn
 
 
@@ -117,8 +123,7 @@ class code_mutator():
 
         # make mutant code with AST
         with open("json_tmp","w") as f:
-            json_val=json.dumps(ast_to_json(self.parsed))
-            json.dump(json_val,f)
+            f.write(json.dumps(ast_to_json(self.parsed)))
         os.system(f'node {os.path.dirname(os.path.abspath(__file__))}\js_codegen\codegen.js')
         
         with open("testfile.js","r") as g:
