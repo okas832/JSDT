@@ -7,7 +7,8 @@ import os
 import re
 from random import randrange
 
-esprima_obj=[esprima.nodes.TemplateElement.Value,RegExp ]
+esprima_obj=[esprima.nodes.TemplateElement.Value,RegExp]
+esprima_ignore=[esprima.scanner.SourceLocation,esprima.scanner.Position]
 def ast_to_json(ast):
     rtn=dict()
     for key,val in ast.items():
@@ -15,6 +16,8 @@ def ast_to_json(ast):
             rtn[key]=ast_to_json(val)
         elif type(val) in esprima_obj:
             rtn[key]=ast_to_json(val.__dict__)
+        elif type(val) in esprima_ignore:
+            continue
         elif isinstance(val,list):
             rtn[key]=list()
             for ele in val:
@@ -32,53 +35,86 @@ def ast_to_json(ast):
             print(val)
             raise Exception
 
-        if "type" in ast.keys() and ast.type=="ArrowFunctionExpression":
-            rtn["id"]=None
+    if "type" in ast.keys() and ast.type=="ArrowFunctionExpression":
+        rtn["id"]=None
     return rtn
 
 
 class code_mutator():
-
-    UpdateOp=("++" , "--")
-    BinaryOp=(("==" , "!=" , "===" , "!==") 
+    '''
+    mutation unit
+    class objects:
+        - mutation_op_case: list of possible mutation. For each Experssions, there are many operations possible.
+         mutation_op_case cluster each operation groups into smaller operation groups that are possible to commute without syntantic errors.
+         For example, ("<<" , ">>" , ">>>") are possible to be mutated to each others, but they cannot mutate to "in" even though they are grouped by "Binary operation".
+    '''
+    mutation_op_case={
+    "UpdateExpression":(("++" , "--"),),
+    "BinaryExpression":(("==" , "!=" , "===" , "!==") 
         , ("<" , "<=" , ">" , ">=")
         , ("<<" , ">>" , ">>>")
         , ("+" , "-" , "*" , "/" , "%")
         , (",") 
         , ("^" , "&") 
         , ("in")
-        , ("instanceof"))
-    AssignmentOp=(("=" , "+=" , "-=" , "*=" , "/=" , "%=")
+        , ("instanceof")),
+    "AssignmentExpression":(("=" , "+=" , "-=" , "*=" , "/=" , "%=")
         , ("<<=" , ">>=" , ">>>=")
-        , ("|=" , "^=" , "&="))
-    LogicalOp=("||" , "&&")
-    UnaryOp=(("-" , "+" , "!" , "~" )
+        , ("|=" , "^=" , "&=")),
+    "LogicalExpression":(("||" , "&&"),),
+    "UnaryExpression":(("-" , "+" , "!" , "~" )
         , ("typeof") 
         , ("void") 
         , ("delete"))
+    }
 
     def __init__(self,program,mut_mode="random"):
+        '''
+        program: strings of target program
+        mut_mode: mutation mode. This will be applied when generate mutate(gen_mutant)
+
+        instance objects:
+            - node_history: list of (original_op,mutating_op,loc,node class).
+              node class is used for rolling back. Do not directly extract information
+        '''
         assert isinstance(program,str)
         self.code=program
         self.mut_cnt=0
         self.mut_mode=mut_mode
         self.recent_mut=None
-
-        self.target_node_type=[
-            'UpdateExpression',
-            'BinaryExpression',
-            'AssignmentExpression',
-            'LogicalExpression',
-            'UnaryExpression',
-        ]
         self.node_list=[]
-        self.parsed=esprima.parseScript(program,delegate=self.fragile_code_stack)
+        self.parsed=esprima.parseScript(program,delegate=self.mutant_cand_stack,loc=True)
+        self.node_history=[]
+        self.dirpath=os.path.dirname(os.path.abspath(__file__))
+    def mutant_cand_stack(self,node,metadata):
+        '''
+        stack nodes that are possible to mutate
+        '''
+        if node.type in code_mutator.mutation_op_case.keys():
+            for exchangable_op in code_mutator.mutation_op_case[node.type]:
+                if node.operator in exchangable_op and len(exchangable_op)>1:
+                    self.node_list.append(node)
+                    break
+            else:
+                print("operation in invalid node")
+                raise Exception()
     
-    def fragile_code_stack(self,node,metadata):
-        if node.type in self.target_node_type:
-            self.node_list.append(node)
-    
+    def gen_code(self):
+        
+        with open(f"{self.dirpath}/js_codegen/json_tmp","w") as f:
+            f.write(json.dumps(ast_to_json(self.parsed)))
+        os.system(f'node {self.dirpath}/js_codegen/codegen.js')
+        
+        with open(f"{self.dirpath}/js_codegen/testfile.js","r") as g:
+            rst=g.read()
+        os.remove(f"{self.dirpath}/js_codegen/json_tmp")
+        os.remove(f"{self.dirpath}/js_codegen/testfile.js")
+        return rst
+
     def gen_mutant(self):
+        '''
+        generate mutant code (string) given condition 'mut_mode'
+        '''
         # mutate AST
         if self.mut_mode=="random":
             target_node=self.node_list.pop(randrange(len(self.node_list))) # try catch for empty case(future)
@@ -86,66 +122,46 @@ class code_mutator():
                 target_node=self.node_list.pop(randrange(len(self.node_list)))
             # do specfic protocol for each expressions (future)
 
-            if target_node.type=='UpdateExpression':
-                target_node.operator='--' if '++'==target_node.operator else '++'
-
-            elif target_node.type=='BinaryExpression':
-                for exchangable_op in code_mutator.BinaryOp:
+            if target_node.type in code_mutator.mutation_op_case.keys():
+                for exchangable_op in code_mutator.mutation_op_case[target_node.type]:
                     if target_node.operator in exchangable_op:
                         i=exchangable_op.index(target_node.operator)
                         j=randrange(len(exchangable_op)-1)
                         target_node.operator=exchangable_op[j if i>j else j+1]
-
-            elif target_node.type=='AssignmentExpression':
-                for exchangable_op in code_mutator.AssignmentOp:
-                    if target_node.operator in exchangable_op:
-                        i=exchangable_op.index(target_node.operator)
-                        j=randrange(len(exchangable_op)-1)
-                        target_node.operator=exchangable_op[j if i>j else j+1]
-
-            elif target_node.type=='LogicalExpression':
-                for exchangable_op in code_mutator.LogicalOp:
-                    if target_node.operator in exchangable_op:
-                        i=exchangable_op.index(target_node.operator)
-                        j=randrange(len(exchangable_op)-1)
-                        target_node.operator=exchangable_op[j if i>j else j+1]
-
-            elif target_node.type=='UnaryExpression':
-                for exchangable_op in code_mutator.UnaryOp:
-                    if target_node.operator in exchangable_op:
-                        i=exchangable_op.index(target_node.operator)
-                        j=randrange(len(exchangable_op)-1)
-                        target_node.operator=exchangable_op[j if i>j else j+1]
+                        self.node_history.append((i,j,target_node.loc,target_node))
+            else:
+                # mutation is not available
+                return None
 
         else:
             print("no possible mutation") ## raise exception (future)
             return None
 
         # make mutant code with AST
-        with open("json_tmp","w") as f:
-            f.write(json.dumps(ast_to_json(self.parsed)))
-        os.system(f'node {os.path.dirname(os.path.abspath(__file__))}\js_codegen\codegen.js')
-        
-        with open("testfile.js","r") as g:
-            rst=g.read()
-        os.remove("json_tmp")
-        os.remove("testfile.js")
-        return rst
-        
-        
-        
+        return self.gen_code()
+    
+    def roll_back(self):
+        '''
+        roll back code from recent mutation
+        '''
+        i,j,_,node=self.node_history.pop()
+        assert node.operator==j
+        node.operator=i
 
-
+        
+        
+        
 
 
 if __name__ == "__main__":
     '''
     exmample code for 
     '''
-    with open("examples/test.js","r") as f:
+    dirname=os.path.dirname(os.path.abspath(__file__))+'/examples'
+    with open(f"{dirname}/test.js","r") as f:
         program=f.read()
     mut_manager=code_mutator(program)
     mut_program=mut_manager.gen_mutant()
-    with open("examples/test_mut.js","w") as g:
+    with open(f"{dirname}/test_mut.js","w") as g:
         g.write(mut_program)
     
