@@ -5,7 +5,11 @@ from esprima.scanner import RegExp
 import json
 import os
 import re
+import pexpect
+import requests
+import atexit
 from random import randrange
+
 
 esprima_obj=[esprima.nodes.TemplateElement.Value,RegExp]
 esprima_ignore=[esprima.scanner.SourceLocation,esprima.scanner.Position]
@@ -67,7 +71,15 @@ class code_mutator():
         , ("void") 
         , ("delete"))
     }
-
+    class_cnt=0
+    dirpath=os.path.dirname(os.path.abspath(__file__))
+    js_server=pexpect.spawn(f"node {dirpath}/js_codegen/codegen_server.js",encoding='utf-8')
+    atexit.register(js_server.close)
+    js_server.expect("server is running...")
+    js_server.expect("\n")
+    port_num=int(js_server.before)
+    
+    
     def __init__(self,program,mut_mode="random"):
         '''
         program: strings of target program
@@ -85,7 +97,7 @@ class code_mutator():
         self.node_list=[]
         self.parsed=esprima.parseScript(program,delegate=self.mutant_cand_stack,loc=True)
         self.node_history=[]
-        self.dirpath=os.path.dirname(os.path.abspath(__file__))
+
     def mutant_cand_stack(self,node,metadata):
         '''
         stack nodes that are possible to mutate
@@ -100,16 +112,9 @@ class code_mutator():
                 raise Exception()
     
     def gen_code(self):
-        
-        with open(f"{self.dirpath}/js_codegen/json_tmp","w") as f:
-            f.write(json.dumps(ast_to_json(self.parsed)))
-        os.system(f'node {self.dirpath}/js_codegen/codegen.js')
-        
-        with open(f"{self.dirpath}/js_codegen/testfile.js","r") as g:
-            rst=g.read()
-        os.remove(f"{self.dirpath}/js_codegen/json_tmp")
-        os.remove(f"{self.dirpath}/js_codegen/testfile.js")
-        return rst
+        res=requests.post(f'http://127.0.0.1:{code_mutator.port_num}/',data=json.dumps(ast_to_json(self.parsed)).replace("\\'","\'"))
+        assert res.status_code==200
+        return res.text
 
     def gen_mutant(self):
         '''
@@ -128,7 +133,7 @@ class code_mutator():
                         i=exchangable_op.index(target_node.operator)
                         j=randrange(len(exchangable_op)-1)
                         target_node.operator=exchangable_op[j if i>j else j+1]
-                        self.node_history.append((i,j,target_node.loc,target_node))
+                        self.node_history.append((i,j if i>j else j+1,target_node.loc,target_node))
             else:
                 # mutation is not available
                 return None
