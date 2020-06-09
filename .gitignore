@@ -1,3 +1,3 @@
 .vscode/
 mutator/js_codegen/node_modules/
-mutator/examples/test_mut.js
+mutator/examples/test_*
