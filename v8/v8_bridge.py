@@ -24,4 +24,23 @@ def test_js_file(filename):
   console_result = ctx.eval("log_stack")
   print(console_result)
 
-test_js_file("js_test.js")
+class V8bridge():
+  def __init__(self):
+    self.context = get_js_context()
+    override_console(self.context)
+  
+  def eval_source(self, source):
+    assert(self.context != None)
+    self.context.eval(source)
+  
+  def eval_filename(self, filename):
+    assert(self.context != None)
+    with open(filename, 'r') as js_file:
+      self.context.eval(js_file.read())
+  
+  def current_log(self):
+    console_result = self.context.eval("log_stack")
+    return console_result
+
+if __name__ == '__main__':
+  test_js_file("js_test.js")
