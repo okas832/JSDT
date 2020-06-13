@@ -4,7 +4,7 @@ from py_mini_racer import py_mini_racer as pmr
 # need to override console functions, such as console.log, console.err, etc
 # and when execution is complete, collect the results
 def override_console(ctx):
-  ovrr_file = open("override_console.js", 'r')
+  ovrr_file = open("v8/override_console.js", 'r')
   ctx.eval(ovrr_file.read())
 
 def snapshot_console(ctx):
