@@ -1,5 +1,5 @@
 .vscode/
 mutator/js_codegen/node_modules/
-mutator/examples/test_mut.js
 __pycache__/
 /venv
+mutator/examples/test_*
