@@ -8,7 +8,7 @@ def override_console(ctx):
   ctx.eval(ovrr_file.read())
 
 def snapshot_console(ctx):
-  console_stack = ctx.eval("log_stack")
+  console_stack = ctx.eval("log_stack.map(JSON.stringify)")
   return console_stack
 
 class V8bridge():
@@ -31,6 +31,9 @@ class V8bridge():
     return snapshot_console(self.ctx)
 
 def test_js_file(filename):
-  pass
+  v8 = V8bridge()
+  v8.eval_file(filename)
+  print(v8.result_console())
 
-test_js_file("js_test.js")
+if __name__ == "__main__":
+  test_js_file("js_test.js")
