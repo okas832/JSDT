@@ -24,12 +24,11 @@ def get_seed(d):
 
 save_dir = "report/"
 
-target_dir = sys.argv[1]
+target_dir = sys.argv[1] + ("" if sys.argv[1][-1] == "/" else "/")
 
 signal.signal(signal.SIGALRM, handler)
 
 for target_program in get_seed(target_dir):
-    print(target_program)
     with open(target_program, "r") as f:
         Mutator = code_mutator(f.read())
         for i in range(10):
@@ -37,7 +36,6 @@ for target_program in get_seed(target_dir):
                 m_code = Mutator.gen_mutant()
             except:
                 break
-            print(m_code)
             sm = Spidermonkey(early_script_file='-', code=m_code)
             signal.alarm(2)
             try:
