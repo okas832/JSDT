@@ -97,6 +97,8 @@ class code_mutator():
         self.mut_mode=mut_mode
         self.recent_mut=None
         self.node_list=[]
+        self.node_list_used=[]
+        self.recycling=0 # number of recyling of node
         
         if seg_loc_change:
             self.parsed=esprima.parseScript(program)
@@ -111,7 +113,7 @@ class code_mutator():
         '''
         if node.type in code_mutator.mutation_op_case.keys():
             for exchangable_op in code_mutator.mutation_op_case[node.type]:
-                if node.operator in exchangable_op and len(exchangable_op)>1:
+                if node.operator in exchangable_op and len(exchangable_op)>1 :
                     self.node_list.append(node)
                     break
             else:
@@ -130,8 +132,12 @@ class code_mutator():
         # mutate AST
         if self.mut_mode=="random":
             target_node=self.node_list.pop(randrange(len(self.node_list))) # try catch for empty case(future)
-            while (target_node.operator in (',','in','instanceof','typeof','void','delete')):
-                target_node=self.node_list.pop(randrange(len(self.node_list)))
+            self.node_list_used.append(target_node)
+            if (not self.node_list):
+                self.node_list=self.node_list_used
+                self.node_list_used=[]
+                self.recycling+=1
+
             # do specfic protocol for each expressions (future)
 
             if target_node.type in code_mutator.mutation_op_case.keys():
@@ -146,7 +152,7 @@ class code_mutator():
                 return None
 
         else:
-            print("no possible mutation") ## raise exception (future)
+            print("no possible mutation option") 
             return None
 
         # make mutant code with AST
@@ -174,11 +180,15 @@ if __name__ == "__main__":
         program=f.read()
     mut_manager=code_mutator(program)
     ori_program=mut_manager.gen_code()
-    mut_program=mut_manager.gen_mutant()
-    print(f"mutation occurs at line {mut_manager.node_history[-1][2].start.line}")
+
+    for _ in range(100):
+        mut_program=mut_manager.gen_mutant()
+        print(f"mutation occurs at line {mut_manager.node_history[-1][2].start.line}")
+
     with open(f"{dirname}/test_origin.js","w") as g:
         g.write(ori_program)
 
     with open(f"{dirname}/test_mut.js","w") as g:
         g.write(mut_program)
+    
     
