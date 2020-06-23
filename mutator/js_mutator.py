@@ -99,6 +99,7 @@ class code_mutator():
         self.node_list=[]
         self.node_list_used=[]
         self.recycling=0 # number of recyling of node
+        
         if seg_loc_change:
             self.parsed=esprima.parseScript(program)
             self.parsed=esprima.parseScript(self.gen_code(),delegate=self.mutant_cand_stack,loc=True)
@@ -179,9 +180,11 @@ if __name__ == "__main__":
         program=f.read()
     mut_manager=code_mutator(program)
     ori_program=mut_manager.gen_code()
+
     for _ in range(100):
         mut_program=mut_manager.gen_mutant()
         print(f"mutation occurs at line {mut_manager.node_history[-1][2].start.line}")
+
     with open(f"{dirname}/test_origin.js","w") as g:
         g.write(ori_program)
 
