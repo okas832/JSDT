@@ -1,0 +1,1 @@
+Spidermonkey wrapper is based on Mozilla's [python-spidermoney](https://github.com/mozilla/python-spidermonkey) ported to python3.
