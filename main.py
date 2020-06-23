@@ -3,7 +3,13 @@ from spidermonkey import Spidermonkey
 from v8.v8_bridge import V8bridge
 from differ.diff import diff
 import os
+import sys
 import signal
+
+if len(sys.argv) != 2:
+    print("Usage : %s <seeds_dir>"%(sys.argv[0]))
+    print("seeds_dir : path that contain seed to mutate")
+    exit(0)
 
 def handler():
     raise Exception("Timeout")
@@ -17,15 +23,16 @@ def get_seed(d):
                 yield d + f
 
 save_dir = "report/"
-target_dir = "./test262/test/annexB/"
+
+target_dir = sys.argv[1]
 
 signal.signal(signal.SIGALRM, handler)
-#for target_program in get_seed(target_dir):
-for target_program in ["./input/sample01.js"]:
+
+for target_program in get_seed(target_dir):
     print(target_program)
     with open(target_program, "r") as f:
         Mutator = code_mutator(f.read())
-        for i in range(2):
+        for i in range(10):
             try:
                 m_code = Mutator.gen_mutant()
             except:
@@ -47,7 +54,7 @@ for target_program in ["./input/sample01.js"]:
             except Exception as x:
                 v8_out = ""
                 if x.args[0] == "bTimeout":
-                    v8_err = b"Timeour"
+                    v8_err = b"Timeout"
                 elif isinstance(x.args[0], bytes):
                     v8_err = x.args[0]
                 else:
